@@ -1,12 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { User, ArrowUp, Lightbulb, Edit3, Copy, Loader2, Menu, X, Crown, History, Zap } from "lucide-react"
 import { useUser, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
 import Link from "next/link"
+import { toast } from "sonner"
+import { useToast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 
 // Import components directly instead of lazy loading for faster initial load
 import { OnboardingModal } from "@/components/onboarding-modal"
@@ -67,6 +70,11 @@ const SparkleIcon = () => (
   </svg>
 )
 
+type ErrorState = {
+  message: string
+  code?: string
+}
+
 export default function ExamGPTLanding() {
   const { isSignedIn, user, isLoaded } = useUser()
   const [selectedMode, setSelectedMode] = useState<"explain" | "practice">("explain")
@@ -82,6 +90,8 @@ export default function ExamGPTLanding() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
+  const [error, setError] = useState<ErrorState | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -103,9 +113,13 @@ export default function ExamGPTLanding() {
     }
   }, [messages])
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
+      setIsInitializing(true)
       const response = await fetch("/api/user")
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
       if (!data.user) {
         setShowOnboarding(true)
@@ -115,8 +129,15 @@ export default function ExamGPTLanding() {
       }
     } catch (error) {
       console.error("Failed to fetch user data:", error)
+      setError({
+        message: "Failed to load user data. Please try again.",
+        code: "USER_DATA_ERROR"
+      })
+      toast.error("Failed to load user data. Please try again.")
+    } finally {
+      setIsInitializing(false)
     }
-  }
+  }, [])
 
   const handleOnboardingComplete = async (data: any) => {
     try {
@@ -151,101 +172,53 @@ export default function ExamGPTLanding() {
   const isSubscribed = userData?.subscription_status === "active"
   const freeUserReachedLimit = isSignedIn && !isSubscribed && messageCount >= 10
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return
-
-    if (hasReachedLimit || freeUserReachedLimit) {
-      setShowUpgrade(true)
-      return
-    }
-
-    let chatId = currentChatId
-    if (isSignedIn && !chatId) {
-      try {
-        const response = await fetch("/api/chats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: inputValue.slice(0, 50) }),
-        })
-        const data = await response.json()
-        chatId = data.chat?.id
-        setCurrentChatId(chatId)
-      } catch (error) {
-        console.error("Failed to create chat:", error)
-      }
-    }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
-      sender: "user",
-      timestamp: new Date(),
-      mode: selectedMode,
-      subject: selectedSubject,
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-    setIsLoading(true)
-
-    if (!isSignedIn) {
-      const newCount = messageCount + 1
-      setMessageCount(newCount)
-      localStorage.setItem("examgpt_message_count", newCount.toString())
-    }
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || isLoading) return
 
     try {
+      setIsLoading(true)
+      setError(null)
+      
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: inputValue,
+          content,
           mode: selectedMode,
           subject: selectedSubject,
-          chatId,
-        }),
+          chatId: currentChatId
+        })
       })
 
-      if (response.status === 429 || response.status === 402) {
-        setShowUpgrade(true)
-        return
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
-
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.response,
+      
+      setMessages((prev: Message[]) => [...prev, {
+        id: data.id,
+        content: data.content,
         sender: "ai",
         timestamp: new Date(),
         mode: selectedMode,
-        subject: selectedSubject,
-      }
-
-      setMessages((prev) => [...prev, aiMessage])
-
-      if (isSignedIn) {
-        setMessageCount((prev) => prev + 1)
-      }
+        subject: selectedSubject
+      }])
+      
+      setMessageCount((prev: number) => prev + 1)
+      localStorage.setItem("examgpt_message_count", String(messageCount + 1))
+      
     } catch (error) {
-      console.error("Error sending message:", error)
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "Sorry, I'm having trouble responding right now. Please try again.",
-        sender: "ai",
-        timestamp: new Date(),
-        mode: selectedMode,
-        subject: selectedSubject,
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      console.error("Failed to send message:", error)
+      setError({
+        message: "Failed to send message. Please try again.",
+        code: "MESSAGE_SEND_ERROR"
+      })
+      toast.error("Failed to send message. Please try again.")
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [isLoading, selectedMode, selectedSubject, currentChatId, messageCount])
 
   const promptCards = [
     {
@@ -296,12 +269,38 @@ export default function ExamGPTLanding() {
     : "bg-gray-300 text-gray-500 cursor-not-allowed"
 
   // Show loading only briefly
-  if (!isLoaded) {
+  if (isInitializing) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading your personalized experience...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Add error state UI
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="text-red-500 mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-gray-600 mb-4">{error.message}</p>
+          <button
+            onClick={() => {
+              setError(null)
+              fetchUserData()
+            }}
+            className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     )
@@ -548,97 +547,47 @@ export default function ExamGPTLanding() {
       </main>
 
       {/* Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 sm:pb-4 space-y-3 sm:space-y-2">
+          <div className="flex gap-2">
             <Textarea
-              placeholder={
-                hasReachedLimit || freeUserReachedLimit
-                  ? "Upgrade to Pro to continue..."
-                  : "Ask anything from your syllabus, exams, startups, or even relationships"
-              }
-              className="w-full border-0 bg-transparent text-sm sm:text-base placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 pb-0 mb-0 resize-none min-h-[40px] sm:min-h-[50px] font-normal"
-              rows={2}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Ask anything..."
+              className="flex-1 resize-none"
+              rows={1}
+              disabled={isLoading}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
-                  handleSendMessage()
+                  if (canSend) {
+                    sendMessage(inputValue)
+                    setInputValue("")
+                  }
                 }
               }}
-              disabled={hasReachedLimit || freeUserReachedLimit}
             />
-
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-              <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
-                <button
-                  onClick={() => setSelectedMode("explain")}
-                  className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-full text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-all font-medium whitespace-nowrap ${
-                    selectedMode === "explain"
-                      ? "bg-white text-black shadow-sm border border-gray-200"
-                      : "text-gray-600 hover:text-gray-800 hover:bg-white/50"
-                  }`}
-                  disabled={hasReachedLimit || freeUserReachedLimit}
-                >
-                  <Lightbulb size={14} />
-                  Explain
-                </button>
-                <button
-                  onClick={() => setSelectedMode("practice")}
-                  className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-full text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-all font-medium whitespace-nowrap ${
-                    selectedMode === "practice"
-                      ? "bg-white text-black shadow-sm border border-gray-200"
-                      : "text-gray-600 hover:text-gray-800 hover:bg-white/50"
-                  }`}
-                  disabled={hasReachedLimit || freeUserReachedLimit}
-                >
-                  <Edit3 size={14} />
-                  Practice
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between sm:gap-3">
-                <Select
-                  value={selectedSubject}
-                  onValueChange={setSelectedSubject}
-                  disabled={hasReachedLimit || freeUserReachedLimit}
-                >
-                  <SelectTrigger className="w-auto border-0 bg-transparent px-3 py-2 sm:px-4 sm:py-2.5 h-auto text-xs sm:text-sm font-medium hover:bg-white/50 rounded-full">
-                    <SelectValue>{subjects.find((s) => s.value === selectedSubject)?.label}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="min-w-[180px] max-h-[300px] overflow-y-auto">
-                    {subjects.map((subject) => (
-                      <SelectItem key={subject.value} value={subject.value}>
-                        {subject.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  size="icon"
-                  className={`rounded-full h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 transition-all shadow-sm ${sendButtonClass}`}
-                  onClick={handleSendMessage}
-                  disabled={!canSend}
-                >
-                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
-                </Button>
-              </div>
-            </div>
+            <Button
+              onClick={() => {
+                if (canSend) {
+                  sendMessage(inputValue)
+                  setInputValue("")
+                }
+              }}
+              disabled={!canSend || isLoading}
+              className={cn(
+                "shrink-0",
+                sendButtonClass,
+                isLoading && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-
-          <p className="text-xs sm:text-sm text-gray-500 text-center mt-3 sm:mt-4 px-2 leading-relaxed">
-            By messaging <span className="font-medium text-gray-700">ExamGPT</span>, you agree to our{" "}
-            <Link href="/terms" className="underline cursor-pointer hover:text-gray-700">
-              Terms
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="underline cursor-pointer hover:text-gray-700">
-              Privacy Policy
-            </Link>
-            .
-          </p>
         </div>
       </div>
 
