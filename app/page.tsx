@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,6 +27,18 @@ type Message = {
   subject: string
 }
 
+type ErrorState = {
+  message: string
+  code?: string
+}
+
+type UserData = {
+  course?: string
+  university?: string
+  subscription_status?: string
+  messages_used?: number
+}
+
 // Simple typewriter component
 function SimpleTypewriter() {
   const [text, setText] = useState("")
@@ -49,7 +62,7 @@ function SimpleTypewriter() {
     } else {
       const timeout = setTimeout(() => {
         setText("")
-        setIndex((prev) => prev + 1)
+        setIndex((prev: number) => prev + 1)
       }, 2000)
       return () => clearTimeout(timeout)
     }
@@ -70,11 +83,6 @@ const SparkleIcon = () => (
   </svg>
 )
 
-type ErrorState = {
-  message: string
-  code?: string
-}
-
 export default function ExamGPTLanding() {
   const { isSignedIn, user, isLoaded } = useUser()
   const [selectedMode, setSelectedMode] = useState<"explain" | "practice">("explain")
@@ -86,7 +94,7 @@ export default function ExamGPTLanding() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showChatHistory, setShowChatHistory] = useState(false)
-  const [userData, setUserData] = useState<any>(null)
+  const [userData, setUserData] = useState<UserData | null>(null)
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
@@ -552,12 +560,12 @@ export default function ExamGPTLanding() {
           <div className="flex gap-2">
             <Textarea
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
               placeholder="Ask anything..."
               className="flex-1 resize-none"
               rows={1}
               disabled={isLoading}
-              onKeyDown={(e) => {
+              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
                   if (canSend) {
