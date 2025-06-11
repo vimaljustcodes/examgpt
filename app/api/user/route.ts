@@ -1,14 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const userData = await req.json()
 
     // Validate required fields
@@ -21,7 +15,7 @@ export async function POST(req: NextRequest) {
       .from("users")
       .upsert(
         {
-          clerk_id: userId,
+          clerk_id: "defaultUserId",
           email: userData.email,
           country: userData.country,
           university: userData.university,
@@ -52,12 +46,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: user, error } = await supabaseAdmin.from("users").select("*").eq("clerk_id", userId).single()
+    const { data: user, error } = await supabaseAdmin.from("users").select("*").eq("clerk_id", "defaultUserId").single()
 
     if (error && error.code !== "PGRST116") {
       console.error("Database error:", error)
@@ -73,11 +62,6 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const updates = await req.json()
 
     const { data, error } = await supabaseAdmin
@@ -86,7 +70,7 @@ export async function PATCH(req: NextRequest) {
         ...updates,
         updated_at: new Date().toISOString(),
       })
-      .eq("clerk_id", userId)
+      .eq("clerk_id", "defaultUserId")
       .select()
       .single()
 
