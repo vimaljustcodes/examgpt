@@ -362,22 +362,27 @@ Respond as ExamGPT with your signature sarcastic but helpful style. Use proper f
 
     return NextResponse.json({ response: text })
   } catch (error) {
-    console.error("Chat API error:", error)
+    // Enhanced error logging
+    if (error instanceof Error) {
+      console.error("Chat API error:", error.message, error.stack)
+    } else {
+      console.error("Chat API unknown error:", error)
+    }
 
     // More specific error handling
     if (error instanceof Error) {
       if (error.message.includes("API_KEY_INVALID") || error.message.includes("API key")) {
-        return NextResponse.json({ error: "AI service configuration error. Please contact support." }, { status: 500 })
+        return NextResponse.json({ error: "AI service configuration error. Please contact support.", details: error.message }, { status: 500 })
       }
       if (error.message.includes("QUOTA_EXCEEDED") || error.message.includes("quota")) {
         return NextResponse.json(
-          { error: "AI service temporarily unavailable. Please try again later." },
+          { error: "AI service temporarily unavailable. Please try again later.", details: error.message },
           { status: 503 },
         )
       }
       if (error.message.includes("SAFETY")) {
         return NextResponse.json(
-          { error: "Content filtered for safety. Please rephrase your question." },
+          { error: "Content filtered for safety. Please rephrase your question.", details: error.message },
           { status: 400 },
         )
       }
@@ -387,6 +392,7 @@ Respond as ExamGPT with your signature sarcastic but helpful style. Use proper f
     return NextResponse.json(
       {
         error: "I'm having trouble thinking right now. Give me a sec and try again, bro! 🤖",
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )
