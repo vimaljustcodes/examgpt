@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const { data: chat, error } = await supabaseAdmin
       .from("chats")
       .insert({
-        user_id: userResult.id,
+        user_id: "defaultUserId", // Replace with actual logic if needed
         title: "New Chat",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
