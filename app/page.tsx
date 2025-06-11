@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Copy, Loader2, Menu, X, ArrowUp } from "lucide-react"
-import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 // Import components directly instead of lazy loading for faster initial load
@@ -135,7 +134,6 @@ export default function ExamGPTLanding() {
         message: "Failed to load user data. Please try again.",
         code: "USER_DATA_ERROR"
       })
-      toast.error("Failed to load user data. Please try again.")
     } finally {
       setIsInitializing(false)
     }
@@ -230,7 +228,6 @@ export default function ExamGPTLanding() {
         message: "Failed to send message. Please try again.",
         code: "MESSAGE_SEND_ERROR"
       })
-      toast.error("Failed to send message. Please try again.")
     } finally {
       setIsLoading(false)
     }
