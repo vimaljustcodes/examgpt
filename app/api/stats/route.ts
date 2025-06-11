@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Get user's internal ID
     const { data: userResult } = await supabaseAdmin
       .from("users")
       .select("id, messages_used, subscription_status, created_at")
-      .eq("clerk_id", userId)
       .single()
 
     if (!userResult) {

@@ -1,16 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Get user's chats with message preview
-    const { data: userResult } = await supabaseAdmin.from("users").select("id").eq("clerk_id", userId).single()
+    const { data: userResult } = await supabaseAdmin.from("users").select("id").single()
 
     if (!userResult) {
       return NextResponse.json({ chats: [] })
@@ -57,15 +51,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { title } = await req.json()
-
     // Get user ID
-    const { data: userResult } = await supabaseAdmin.from("users").select("id").eq("clerk_id", userId).single()
+    const { data: userResult } = await supabaseAdmin.from("users").select("id").single()
 
     if (!userResult) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
