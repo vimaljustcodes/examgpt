@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .from("chats")
       .insert({
         user_id: userResult.id,
-        title: title || "New Chat",
+        title: "New Chat",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
