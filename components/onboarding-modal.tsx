@@ -12,7 +12,7 @@ interface OnboardingModalProps {
   onComplete: (data: StudentData) => void
 }
 
-interface StudentData {
+export interface StudentData {
   country: string
   university: string
   course: string

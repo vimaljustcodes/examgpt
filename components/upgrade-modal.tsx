@@ -6,11 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Check, Loader2, X, Zap, Crown, Tag } from "lucide-react"
 import { PAYMENT_PLANS, createPaymentLink } from "@/lib/payments"
+import { v4 as uuidv4 } from 'uuid'
 
 interface UpgradeModalProps {
   isOpen: boolean
   onClose: () => void
-  userId: string
+  userId: string | null
+}
+
+interface PromoCodes {
+  [key: string]: number
 }
 
 export function UpgradeModal({ isOpen, onClose, userId }: UpgradeModalProps) {
@@ -20,14 +25,15 @@ export function UpgradeModal({ isOpen, onClose, userId }: UpgradeModalProps) {
   const [discount, setDiscount] = useState(0)
 
   const handlePromoCode = () => {
-    const validCodes = {
+    const validCodes: PromoCodes = {
       STUDENT50: 50,
       LAUNCH25: 25,
       EXAMGPT: 30,
     }
 
-    if (validCodes[promoCode.toUpperCase()]) {
-      setDiscount(validCodes[promoCode.toUpperCase()])
+    const upperCasePromoCode = promoCode.toUpperCase()
+    if (validCodes[upperCasePromoCode]) {
+      setDiscount(validCodes[upperCasePromoCode])
       setPromoApplied(true)
     } else {
       alert("Invalid promo code")
@@ -37,7 +43,11 @@ export function UpgradeModal({ isOpen, onClose, userId }: UpgradeModalProps) {
   const handleUpgrade = async (planId: string) => {
     setLoading(planId)
     try {
-      const paymentLink = await createPaymentLink(planId, userId, promoCode)
+      const customerIdentifier = userId || uuidv4()
+      if (!userId) {
+        localStorage.setItem("temp_customer_id", customerIdentifier)
+      }
+      const paymentLink = await createPaymentLink(planId, customerIdentifier, promoCode)
       window.location.href = paymentLink.url
     } catch (error) {
       console.error("Payment error:", error)
